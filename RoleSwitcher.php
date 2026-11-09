@@ -113,9 +113,22 @@ class RoleSwitcher extends \ExternalModules\AbstractExternalModule
 		$listUsers = [];
 		$listUserRoles = $this->getProjectSetting( 'user-roles' );
 		$listUserRoles = ( $listUserRoles == '' ? [] : json_decode( $listUserRoles, true ) );
+		if ( empty( $listUserRoles ) )
+		{
+			return $listUsers;
+		}
+		// Only count roles which still exist in this project (roles may have been deleted, or the
+		// settings may have been copied from another project).
+		$queryRoleIDs = $this->query( 'SELECT role_id FROM redcap_user_roles WHERE project_id = ?',
+		                              [ $this->getProjectId() ] );
+		$listRoleIDs = [];
+		while ( $infoRoleID = $queryRoleIDs->fetch_assoc() )
+		{
+			$listRoleIDs[ $infoRoleID['role_id'] ] = true;
+		}
 		foreach ( $listUserRoles as $username => $itemUserRoles )
 		{
-			if ( count( $itemUserRoles ) > 1 )
+			if ( count( array_intersect_key( $itemUserRoles, $listRoleIDs ) ) > 1 )
 			{
 				$listUsers[] = $username;
 			}
