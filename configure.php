@@ -78,12 +78,31 @@ foreach ( $listUserRoles as $username => $infoUserRoles )
 				array_values( $listUserRoles[ $username ][ $userrole ] );
 			if ( empty( $listUserRoles[ $username ][ $userrole ] ) )
 			{
-				unset( $listUserRoles[ $username ] );
-				continue 2;
+				// No valid DAGs left for this role (e.g. project copied, DAGs deleted), so revert
+				// the user to standard DAG handling rather than discarding their role assignments.
+				$listUserRoles[ $username ] = array_map( fn( $v ) => true, $infoUserRoles );
+				foreach ( array_keys( $listUserRoles[ $username ] ) as $r )
+				{
+					if ( ! isset( $listRoles[ $r ] ) )
+					{
+						unset( $listUserRoles[ $username ][ $r ] );
+					}
+				}
+				break;
 			}
 		}
 	}
+	if ( empty( $listUserRoles[ $username ] ) )
+	{
+		unset( $listUserRoles[ $username ] );
+	}
 }
+
+// Use the validated data from here on (and in the page JavaScript), so that stale role/DAG IDs
+// (deleted roles, or IDs from the source project after a project copy) are not carried into the
+// DAG assignments dialog, and are dropped from the stored settings on the next save.
+// Cast to object so an empty list is encoded as {} rather than [].
+$userRolesData = json_encode( (object)$listUserRoles );
 
 
 // Display the project header
@@ -313,6 +332,12 @@ $(function()
           var vValidConfig = true
           Object.keys( vUserRoles[ vUsername ] ).forEach( function( vRoleID )
           {
+            if ( ! ( vRoleID in vListRoles ) )
+            {
+              // Role no longer exists in this project, drop it.
+              delete vUserRoles[ vUsername ][ vRoleID ]
+              return
+            }
             if ( $('#dags-dialog input[data-role="' + vRoleID + '"]:checked').length == 0 )
             {
               vValidConfig = false
